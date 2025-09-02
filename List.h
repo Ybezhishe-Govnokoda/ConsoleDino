@@ -9,6 +9,7 @@ public:
 	void pop_front();
 	void push_back(T data);
 	int get_size();
+	void clear() { while (size) pop_front(); }
 	T &operator[](const int index);
 
 private:
@@ -40,10 +41,7 @@ List<T>::List()
 template <typename T>
 List<T>::~List()
 {
-	while (size)
-	{
-		pop_front();
-	}
+	while (size) pop_front();
 }
 
 template <typename T>

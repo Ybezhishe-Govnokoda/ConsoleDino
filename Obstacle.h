@@ -43,5 +43,5 @@ public:
 	}
 
 private:
-	unsigned short position = 57, size = 0, distance, passed = 0;
+	unsigned short position = 57, distance, passed = 0, size = 0;
 };

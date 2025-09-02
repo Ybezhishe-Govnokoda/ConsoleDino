@@ -17,7 +17,7 @@ using std::thread;
 
 char ground[] = "[][][][][][][][][][][][][][][][][][][][][][][][][][][][][]";
 char player[] = "    D                                                     ";
-char sky[] = "                                                          ";
+char sky[] = "     ";
 
 #include <atomic>
 static std::atomic<bool> dinoAlive{ true };
@@ -58,7 +58,21 @@ constexpr int LAST_POS = 57;
 		for (int i = 0; i < cactuses.get_size(); i++)\
 		{\
 			int p = cactuses[i]->get_pos();\
-			if (p >= 0 && p <= LAST_POS) player[p] = '#';\
+			switch (cactuses[i]->get_size())\
+			{\
+				case 1:\
+					if (p >= 0 && p <= LAST_POS) player[p] = '#';\
+					break;\
+				case 2:\
+					if (p >= 0 && p <= LAST_POS) player[p] = '#';\
+					if (p - 1 >= 0 && p - 1 <= LAST_POS) player[p - 1] = '#';\
+					break;\
+				case 3:\
+					if (p >= 0 && p <= LAST_POS) player[p] = '#';\
+					if (p - 1 >= 0 && p - 1 <= LAST_POS) player[p - 1] = '#';\
+					if (p - 2 >= 0 && p - 2 <= LAST_POS) player[p - 2] = '#';\
+					break;\
+			}\
 			if (p + 1 <= LAST_POS) player[p + 1] = ' ';\
 			if (p > 0) {\
 				cactuses[i]->pos_decrement();\
@@ -79,7 +93,7 @@ void Jump()
 			sky[4] = 'D';
 			player[4] = ' ';
 
-			Sleep(550);
+			Sleep(570);
 
 			sky[4] = ' ';
 			player[4] = 'D';
@@ -96,7 +110,6 @@ int main() {
 	COORD pos = { 0, 0 };
 
 	SetWindowSize(665, 250);
-	HideConsoleCursor;
 
 	const char *logo = R"(
 
@@ -119,6 +132,7 @@ int main() {
 	)";
 
 	ChangeColorToGreen;
+	HideConsoleCursor;
 
 	cout << logo << endl << endl;
 	cout << "	PRESS SPACE TO START";
@@ -131,14 +145,17 @@ int main() {
 
 	unsigned long long score = 0;
 
-	thread jumpCheck(Jump);
-	jumpCheck.detach();
-
 	CreateObstacle;
 
 	while (true)
 	{
 		SetWindowSize(500, 250);
+		HideConsoleCursor;
+		SetConsoleTextAttribute(handle, FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE);
+		system("cls");
+		
+		thread jumpCheck(Jump);
+		jumpCheck.detach();
 
 		while (dinoAlive.load(std::memory_order_relaxed))
 		{
@@ -150,7 +167,7 @@ int main() {
 			UpdateMap;
 			SetConsoleCursorPosition(handle, pos);
 
-			cout << endl << endl << endl << endl << sky;
+			cout << endl << endl << endl << endl << sky << endl;
 			cout << player;
 			cout << ground << endl;
 			cout << endl << "Score: " << score << endl;
@@ -166,17 +183,24 @@ int main() {
 		ChangeColorToGreen;
 
 		cout << endl << "              GAME OVER";
-		cout << endl << "              Your score: " << score << endl;
+		cout << endl << "              Your score: " << score << "   " << dinoAlive << endl;
 		cout << endl << "   PRESS SPACE TO START AGAIN\n   OR ESC TO CLOSE THE GAME" << endl << endl;
 		cout << lose_screen << endl;
 
 		while (true)
 		{
 			if (GetKeyState(VK_SPACE) < 0) {
-				dinoAlive.store(false, std::memory_order_relaxed);
+				dinoAlive.store(true, std::memory_order_relaxed);
+				score = 0;
+				for (int i = 0; i <= LAST_POS; ++i) player[i] = (i == 4 ? 'D' : ' ');
+				cactuses.clear();
+				CreateObstacle;
 				break;
 			}
-			else if (GetKeyState(VK_ESCAPE) < 0) PostMessage(hwnd, WM_CLOSE, 0, 0);
+			else if (GetKeyState(VK_ESCAPE) < 0) {
+				PostMessage(hwnd, WM_CLOSE, 0, 0);
+				break;
+			}
 		}
 	}
 
