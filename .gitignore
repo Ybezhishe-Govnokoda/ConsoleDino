@@ -1,0 +1,8 @@
+x64/
+.vs/
+ConsoleDino/
+
+.sln
+.vcxproj
+.vcxproj.filters
+.vcxproj.user
