@@ -7,43 +7,60 @@
 #include <thread>
 #include <chrono>
 #include <random>
-
-#include "Obstacle.h"
-#include "List.h"
-
-using std::cout;
-using std::endl;
-using std::thread;
-
-char ground[] = "[][][][][][][][][][][][][][][][][][][][][][][][][][][][][]";
-char player[] = "    D                                                     ";
-char sky[] = "     ";
-
+#include <deque>
 #include <atomic>
-static std::atomic<bool> dinoAlive{ true };
 
-List<Obstacle *> cactuses;
+using std::cout, std::endl, std::thread, std::atomic, std::deque;
+
+struct Obstacle {
+	unsigned short position = 57, distance, passed = 0, size = 0;
+
+	Obstacle() {
+		static std::random_device rd;
+		static std::mt19937 gen(rd());
+		std::uniform_int_distribution<> distr_distance(7, 15), distr_size(1, 3);
+
+		size = distr_size(gen);
+		distance = distr_distance(gen);
+	}
+
+	bool distance_check() const
+	{
+		if (size == 0) return true;
+		if (distance == passed) return true;
+		return false;
+	}
+};
+
+struct Map {
+	char ground[59] = "[][][][][][][][][][][][][][][][][][][][][][][][][][][][][]";
+	char player[59] = "    D                                                     ";
+	char sky[6] = "     ";
+};
+
+static atomic<bool> dinoAlive{ true };
+deque<Obstacle *> cactuses;
 
 constexpr int LAST_POS = 57;
 
-#define ChangeColorToGreen \
+#define ChangeColorToGreen(handle) \
 	do{\
 		const WORD color = FOREGROUND_GREEN | FOREGROUND_INTENSITY;\
 		SetConsoleTextAttribute(handle, color);\
 	} while(0)
 
-#define SetWindowSize(width, height) \
+#define SetWindowSize(hwnd, width, height) \
 	do {\
 		if (hwnd != NULL)\
 			MoveWindow(hwnd, 450, 300, width, height, TRUE);\
 	} while(0)
 
-#define HideConsoleCursor \
+#define HideConsoleCursor(handle) \
 	do {\
 		CONSOLE_CURSOR_INFO curs = { 0 };\
 		curs.dwSize = sizeof(curs);\
 		curs.bVisible = FALSE;\
-		::SetConsoleCursorInfo(::GetStdHandle(STD_OUTPUT_HANDLE), &curs);\
+		SetConsoleCursorInfo(handle, &curs);\
 	} while(0)
 
 #define CreateObstacle\
@@ -54,29 +71,29 @@ constexpr int LAST_POS = 57;
 
 #define UpdateMap \
 	do {\
-		player[0] = ' ';\
-		for (int i = 0; i < cactuses.get_size(); i++)\
+		map.player[0] = ' ';\
+		for (int i = 0; i < cactuses.size(); i++)\
 		{\
-			int p = cactuses[i]->get_pos();\
-			switch (cactuses[i]->get_size())\
+			int p = cactuses[i]->position;\
+			switch (cactuses[i]->size)\
 			{\
 				case 1:\
-					if (p >= 0 && p <= LAST_POS) player[p] = '#';\
+					if (p >= 0 && p <= LAST_POS) map.player[p] = '#';\
 					break;\
 				case 2:\
-					if (p >= 0 && p <= LAST_POS) player[p] = '#';\
-					if (p - 1 >= 0 && p - 1 <= LAST_POS) player[p - 1] = '#';\
+					if (p >= 0 && p <= LAST_POS) map.player[p] = '#';\
+					if (p - 1 >= 0 && p - 1 <= LAST_POS) map.player[p - 1] = '#';\
 					break;\
 				case 3:\
-					if (p >= 0 && p <= LAST_POS) player[p] = '#';\
-					if (p - 1 >= 0 && p - 1 <= LAST_POS) player[p - 1] = '#';\
-					if (p - 2 >= 0 && p - 2 <= LAST_POS) player[p - 2] = '#';\
+					if (p >= 0 && p <= LAST_POS) map.player[p] = '#';\
+					if (p - 1 >= 0 && p - 1 <= LAST_POS) map.player[p - 1] = '#';\
+					if (p - 2 >= 0 && p - 2 <= LAST_POS) map.player[p - 2] = '#';\
 					break;\
 			}\
-			if (p + 1 <= LAST_POS) player[p + 1] = ' ';\
+			if (p + 1 <= LAST_POS) map.player[p + 1] = ' ';\
 			if (p > 0) {\
-				cactuses[i]->pos_decrement();\
-				cactuses[i]->passed_increment();\
+				cactuses[i]->position--;\
+				cactuses[i]->passed++;\
 			} else {\
 				cactuses.pop_front();\
 				--i;\
@@ -84,19 +101,19 @@ constexpr int LAST_POS = 57;
 		}\
 	} while(0)
 
-void Jump()
+void Jump(Map *map)
 {
 	while (dinoAlive.load(std::memory_order_relaxed))
 	{
 		if (GetKeyState(VK_SPACE) < 0)
 		{
-			sky[4] = 'D';
-			player[4] = ' ';
+			map->sky[4] = 'D';
+			map->player[4] = ' ';
 
-			Sleep(570);
+			std::this_thread::sleep_for(std::chrono::milliseconds(570));
 
-			sky[4] = ' ';
-			player[4] = 'D';
+			map->sky[4] = ' ';
+			map->player[4] = 'D';
 
 			std::this_thread::sleep_for(std::chrono::milliseconds(80));
 		} else
@@ -107,9 +124,10 @@ void Jump()
 int main() {
 	HWND hwnd = GetConsoleWindow();
 	HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
-	COORD pos = { 0, 0 };
 
-	SetWindowSize(665, 250);
+	SetWindowSize(hwnd, 665, 250);
+
+	Map map;
 
 	const char *logo = R"(
 
@@ -131,8 +149,8 @@ int main() {
 	                                          \_\
 	)";
 
-	ChangeColorToGreen;
-	HideConsoleCursor;
+	ChangeColorToGreen(handle);
+	HideConsoleCursor(handle);
 
 	cout << logo << endl << endl;
 	cout << "	PRESS SPACE TO START";
@@ -149,27 +167,27 @@ int main() {
 
 	while (true)
 	{
-		SetWindowSize(500, 250);
-		HideConsoleCursor;
+		SetWindowSize(hwnd, 500, 250);
+		HideConsoleCursor(handle);
 		SetConsoleTextAttribute(handle, FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE);
 		system("cls");
 		
-		thread jumpCheck(Jump);
+		thread jumpCheck(Jump, &map);
 		jumpCheck.detach();
 
 		while (dinoAlive.load(std::memory_order_relaxed))
 		{
-			if (player[4] == ' ' && sky[4] != 'D')
+			if (map.player[4] == ' ' && map.sky[4] != 'D')
 				dinoAlive.store(false, std::memory_order_relaxed);
 
-			if (cactuses[cactuses.get_size() - 1]->distance_check()) CreateObstacle;
+			if (cactuses[cactuses.size() - 1]->distance_check()) CreateObstacle;
 
 			UpdateMap;
-			SetConsoleCursorPosition(handle, pos);
+			SetConsoleCursorPosition(handle, { 0, 0 });
 
-			cout << endl << endl << endl << endl << sky << endl;
-			cout << player;
-			cout << ground << endl;
+			cout << endl << endl << endl << endl << map.sky << endl;
+			cout << map.player;
+			cout << map.ground << endl;
 			cout << endl << "Score: " << score << endl;
 
 			score++;
@@ -178,9 +196,9 @@ int main() {
 
 		system("cls");
 
-		SetWindowSize(500, 350);
-		HideConsoleCursor;
-		ChangeColorToGreen;
+		SetWindowSize(hwnd, 500, 350);
+		HideConsoleCursor(handle);
+		ChangeColorToGreen(handle);
 
 		cout << endl << "              GAME OVER";
 		cout << endl << "              Your score: " << score << "   " << dinoAlive << endl;
@@ -192,7 +210,7 @@ int main() {
 			if (GetKeyState(VK_SPACE) < 0) {
 				dinoAlive.store(true, std::memory_order_relaxed);
 				score = 0;
-				for (int i = 0; i <= LAST_POS; ++i) player[i] = (i == 4 ? 'D' : ' ');
+				for (int i = 0; i <= LAST_POS; ++i) map.player[i] = (i == 4 ? 'D' : ' ');
 				cactuses.clear();
 				CreateObstacle;
 				break;
