@@ -101,6 +101,11 @@ constexpr int LAST_POS = 57;
 		}\
 	} while(0)
 
+inline void FreeCactuses(deque<Obstacle*> &cactuses) {
+    for (auto* c : cactuses) delete c;
+    cactuses.clear();
+}
+
 void Jump(Map *map)
 {
 	while (dinoAlive.load(std::memory_order_relaxed))
@@ -216,6 +221,7 @@ int main() {
 				break;
 			}
 			else if (GetKeyState(VK_ESCAPE) < 0) {
+				FreeCactuses(cactuses);
 				PostMessage(hwnd, WM_CLOSE, 0, 0);
 				break;
 			}
