@@ -10,19 +10,19 @@
 #include <deque>
 #include <atomic>
 
-using std::cout, std::endl, std::thread, std::atomic, std::deque;
+#define SET_COLOR_TO_GRAY SetConsoleTextAttribute(handle, FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE);
+
+using std::cout, std::endl, std::make_unique, std::thread, std::atomic, std::deque, std::unique_ptr;
+
+constexpr int DINO_POS = 4;
+constexpr int LAST_POS = 57;
+constexpr auto JUMP_DURATION = std::chrono::milliseconds(570);
+constexpr auto JUMP_DELAY = std::chrono::milliseconds(40);
 
 struct Obstacle {
-	unsigned short position = 57, distance, passed = 0, size = 0;
+	unsigned short position, distance, passed, size;
 
-	Obstacle() {
-		static std::random_device rd;
-		static std::mt19937 gen(rd());
-		std::uniform_int_distribution<> distr_distance(7, 15), distr_size(1, 3);
-
-		size = distr_size(gen);
-		distance = distr_distance(gen);
-	}
+	Obstacle() : position(LAST_POS), distance(7 + rand() % 15), passed(0), size(1 + rand() % 3) {}
 
 	bool distance_check() const
 	{
@@ -39,85 +39,71 @@ struct Map {
 };
 
 static atomic<bool> dinoAlive{ true };
-deque<Obstacle *> cactuses;
+deque<Obstacle> cactuses;
 
-constexpr int LAST_POS = 57;
+inline static void ChangeColorToGreen(HANDLE handle)
+{
+	const WORD color = FOREGROUND_GREEN | FOREGROUND_INTENSITY;
+	SetConsoleTextAttribute(handle, color);
+}
 
-#define ChangeColorToGreen(handle) \
-	do{\
-		const WORD color = FOREGROUND_GREEN | FOREGROUND_INTENSITY;\
-		SetConsoleTextAttribute(handle, color);\
-	} while(0)
+inline static void SetWindowSize(HWND hwnd, int width, int height) {
+	if (hwnd) MoveWindow(hwnd, 450, 300, width, height, TRUE);
+}
 
-#define SetWindowSize(hwnd, width, height) \
-	do {\
-		if (hwnd != NULL)\
-			MoveWindow(hwnd, 450, 300, width, height, TRUE);\
-	} while(0)
+inline static void HideConsoleCursor(HANDLE handle)
+{
+	CONSOLE_CURSOR_INFO curs = { 0 };
+	curs.dwSize = sizeof(curs);
+	curs.bVisible = FALSE;
+	SetConsoleCursorInfo(handle, &curs);
+}
 
-#define HideConsoleCursor(handle) \
-	do {\
-		CONSOLE_CURSOR_INFO curs = { 0 };\
-		curs.dwSize = sizeof(curs);\
-		curs.bVisible = FALSE;\
-		SetConsoleCursorInfo(handle, &curs);\
-	} while(0)
+inline static void CreateObstacle(std::deque<Obstacle> &cactuses) {
+	cactuses.emplace_back();
+}
 
-#define CreateObstacle\
-	do {\
-		Obstacle *newbie = new Obstacle;\
-		cactuses.push_back(newbie);\
-	} while(0)
+inline void UpdateMap(Map &map, std::deque<Obstacle> &cactuses) {
+	map.player[0] = ' ';
 
-#define UpdateMap \
-	do {\
-		map.player[0] = ' ';\
-		for (int i = 0; i < cactuses.size(); i++)\
-		{\
-			int p = cactuses[i]->position;\
-			switch (cactuses[i]->size)\
-			{\
-				case 1:\
-					if (p >= 0 && p <= LAST_POS) map.player[p] = '#';\
-					break;\
-				case 2:\
-					if (p >= 0 && p <= LAST_POS) map.player[p] = '#';\
-					if (p - 1 >= 0 && p - 1 <= LAST_POS) map.player[p - 1] = '#';\
-					break;\
-				case 3:\
-					if (p >= 0 && p <= LAST_POS) map.player[p] = '#';\
-					if (p - 1 >= 0 && p - 1 <= LAST_POS) map.player[p - 1] = '#';\
-					if (p - 2 >= 0 && p - 2 <= LAST_POS) map.player[p - 2] = '#';\
-					break;\
-			}\
-			if (p + 1 <= LAST_POS) map.player[p + 1] = ' ';\
-			if (p > 0) {\
-				cactuses[i]->position--;\
-				cactuses[i]->passed++;\
-			} else {\
-				cactuses.pop_front();\
-				--i;\
-			}\
-		}\
-	} while(0)
+	for (int i = 0; i < cactuses.size(); i++) {
+		int pos = cactuses[i].position;
 
-void Jump(Map *map)
+		for (int j = 0; j < cactuses[i].size; j++) {
+			if (pos - j >= 0 && pos - j <= LAST_POS)
+				map.player[pos - j] = '#';
+		}
+
+		if (pos + 1 <= LAST_POS) map.player[pos + 1] = ' ';
+
+		if (pos > 0) {
+			cactuses[i].position--;
+			cactuses[i].passed++;
+		}
+		else {
+			cactuses.pop_front();
+			--i;
+		}
+	}
+}
+
+void static Jump(Map *map)
 {
 	while (dinoAlive.load(std::memory_order_relaxed))
 	{
 		if (GetKeyState(VK_SPACE) < 0)
 		{
-			map->sky[4] = 'D';
-			map->player[4] = ' ';
+			map->sky[DINO_POS] = 'D';
+			map->player[DINO_POS] = ' ';
 
-			std::this_thread::sleep_for(std::chrono::milliseconds(570));
+			std::this_thread::sleep_for(JUMP_DURATION);
 
-			map->sky[4] = ' ';
-			map->player[4] = 'D';
+			map->sky[DINO_POS] = ' ';
+			map->player[DINO_POS] = 'D';
 
-			std::this_thread::sleep_for(std::chrono::milliseconds(80));
+			std::this_thread::sleep_for(JUMP_DELAY);
 		} else
-			std::this_thread::sleep_for(std::chrono::milliseconds(5));
+			std::this_thread::sleep_for(JUMP_DELAY);
 	}
 }
 
@@ -158,31 +144,32 @@ int main() {
 	while (true) if (GetKeyState(VK_SPACE) < 0) break;
 	system("cls");
 
-	// Set color back to gray
-	SetConsoleTextAttribute(handle, FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE);
+	SET_COLOR_TO_GRAY
 
 	unsigned long long score = 0;
 
-	CreateObstacle;
+	CreateObstacle(cactuses);
 
 	while (true)
 	{
 		SetWindowSize(hwnd, 500, 250);
 		HideConsoleCursor(handle);
-		SetConsoleTextAttribute(handle, FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE);
+		SET_COLOR_TO_GRAY
 		system("cls");
 		
 		thread jumpCheck(Jump, &map);
-		jumpCheck.detach();
 
 		while (dinoAlive.load(std::memory_order_relaxed))
 		{
-			if (map.player[4] == ' ' && map.sky[4] != 'D')
+			if (map.player[4] == ' ' && map.sky[4] != 'D') {
 				dinoAlive.store(false, std::memory_order_relaxed);
+				jumpCheck.join();
+			}
 
-			if (cactuses[cactuses.size() - 1]->distance_check()) CreateObstacle;
+			if (cactuses.back().passed == cactuses.back().distance || cactuses.back().size == 0)
+				CreateObstacle(cactuses);
 
-			UpdateMap;
+			UpdateMap(map, cactuses);
 			SetConsoleCursorPosition(handle, { 0, 0 });
 
 			cout << endl << endl << endl << endl << map.sky << endl;
@@ -200,26 +187,51 @@ int main() {
 		HideConsoleCursor(handle);
 		ChangeColorToGreen(handle);
 
+		//////////////////////////////
+		// Game Over screen handler //
+		//////////////////////////////
+		HANDLE hInput = GetStdHandle(STD_INPUT_HANDLE);
+		if (hInput == INVALID_HANDLE_VALUE) {
+			std::cerr << "Ошибка: нет дескриптора ввода\n";
+			return 1;
+		}
+
+		// включаем нужные режимы: клавиатура + стандартный ввод
+		DWORD prevMode;
+		GetConsoleMode(hInput, &prevMode);
+		SetConsoleMode(hInput, ENABLE_EXTENDED_FLAGS | ENABLE_WINDOW_INPUT | ENABLE_MOUSE_INPUT);
+
 		cout << endl << "              GAME OVER";
 		cout << endl << "              Your score: " << score << "   " << dinoAlive << endl;
 		cout << endl << "   PRESS SPACE TO START AGAIN\n   OR ESC TO CLOSE THE GAME" << endl << endl;
 		cout << lose_screen << endl;
 
-		while (true)
-		{
-			if (GetKeyState(VK_SPACE) < 0) {
-				dinoAlive.store(true, std::memory_order_relaxed);
-				score = 0;
-				for (int i = 0; i <= LAST_POS; ++i) map.player[i] = (i == 4 ? 'D' : ' ');
-				cactuses.clear();
-				CreateObstacle;
-				break;
-			}
-			else if (GetKeyState(VK_ESCAPE) < 0) {
-				PostMessage(hwnd, WM_CLOSE, 0, 0);
-				break;
+		bool waiting = true;
+		while (waiting) {
+			INPUT_RECORD record;
+			DWORD events;
+			if (!ReadConsoleInput(hInput, &record, 1, &events))
+				continue; // если ошибка чтения — просто ждём дальше
+
+			if (record.EventType == KEY_EVENT && record.Event.KeyEvent.bKeyDown) {
+				switch (record.Event.KeyEvent.wVirtualKeyCode) {
+				case VK_SPACE:
+					dinoAlive.store(true, std::memory_order_relaxed);
+					score = 0;
+					for (int i = 0; i <= LAST_POS; ++i) map.player[i] = (i == 4 ? 'D' : ' ');
+					cactuses.clear();
+					CreateObstacle;
+					waiting = false;
+					break;
+				case VK_ESCAPE:
+					PostMessage(hwnd, WM_CLOSE, 0, 0);
+					waiting = false;
+					break;
+				}
 			}
 		}
+
+		SetConsoleMode(hInput, prevMode);
 	}
 
 	return 0;
