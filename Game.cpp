@@ -12,7 +12,7 @@
 
 #define SET_COLOR_TO_GRAY SetConsoleTextAttribute(handle, FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE);
 
-using std::cout, std::endl, std::make_unique, std::thread, std::atomic, std::deque, std::unique_ptr;
+using std::cout, std::endl, std::thread, std::atomic, std::deque;
 
 constexpr int DINO_POS = 4;
 constexpr int LAST_POS = 57;
@@ -166,7 +166,7 @@ int main() {
 				jumpCheck.join();
 			}
 
-			if (cactuses.back().passed == cactuses.back().distance || cactuses.back().size == 0)
+			if (cactuses.size() == 0 || cactuses.back().passed == cactuses.back().distance)
 				CreateObstacle(cactuses);
 
 			UpdateMap(map, cactuses);
@@ -197,41 +197,32 @@ int main() {
 		}
 
 		// включаем нужные режимы: клавиатура + стандартный ввод
-		DWORD prevMode;
+		/*DWORD prevMode;
 		GetConsoleMode(hInput, &prevMode);
-		SetConsoleMode(hInput, ENABLE_EXTENDED_FLAGS | ENABLE_WINDOW_INPUT | ENABLE_MOUSE_INPUT);
+		SetConsoleMode(hInput, ENABLE_EXTENDED_FLAGS | ENABLE_WINDOW_INPUT | ENABLE_MOUSE_INPUT);*/
 
 		cout << endl << "              GAME OVER";
 		cout << endl << "              Your score: " << score << "   " << dinoAlive << endl;
 		cout << endl << "   PRESS SPACE TO START AGAIN\n   OR ESC TO CLOSE THE GAME" << endl << endl;
 		cout << lose_screen << endl;
 
-		bool waiting = true;
-		while (waiting) {
-			INPUT_RECORD record;
-			DWORD events;
-			if (!ReadConsoleInput(hInput, &record, 1, &events))
-				continue; // если ошибка чтения — просто ждём дальше
-
-			if (record.EventType == KEY_EVENT && record.Event.KeyEvent.bKeyDown) {
-				switch (record.Event.KeyEvent.wVirtualKeyCode) {
-				case VK_SPACE:
-					dinoAlive.store(true, std::memory_order_relaxed);
-					score = 0;
-					for (int i = 0; i <= LAST_POS; ++i) map.player[i] = (i == 4 ? 'D' : ' ');
-					cactuses.clear();
-					CreateObstacle;
-					waiting = false;
-					break;
-				case VK_ESCAPE:
-					PostMessage(hwnd, WM_CLOSE, 0, 0);
-					waiting = false;
-					break;
-				}
+		while (true)
+		{
+			if (GetKeyState(VK_SPACE) < 0) {
+				dinoAlive.store(true, std::memory_order_relaxed);
+				score = 0;
+				for (int i = 0; i <= LAST_POS; ++i) map.player[i] = (i == 4 ? 'D' : ' ');
+				cactuses.clear();
+				CreateObstacle;
+				break;
+			}
+			else if (GetKeyState(VK_ESCAPE) < 0) {
+				PostMessage(hwnd, WM_CLOSE, 0, 0);
+				break;
 			}
 		}
 
-		SetConsoleMode(hInput, prevMode);
+		/*SetConsoleMode(hInput, prevMode);*/
 	}
 
 	return 0;
